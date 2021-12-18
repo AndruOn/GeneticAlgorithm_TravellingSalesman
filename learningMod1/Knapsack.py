@@ -185,10 +185,6 @@ def insert(arr):
 if __name__== "__main__":
     kn = KnapsackProblem(numObjects=50,populationSize=200,offSpringSize=100,k_selection=5,nbIterations=100)
     kn.printProblem()
-    
-
-
-
     kn.optimise()
 
 
