@@ -1,6 +1,5 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import csv
 
 
 df = pd.read_csv('plot.csv')
@@ -17,4 +16,4 @@ ax.set_ylabel('Cost of the Path (value of the fitness function)')  # Add a y-lab
 ax.set_title("Simple Plot")  # Add a title to the axes.
 ax.set_title('Convergence for tour29.csv')
 ax.legend()
-plt.show()
+plt.savefig("testPlot.png")
