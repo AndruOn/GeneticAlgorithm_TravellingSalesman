@@ -19,7 +19,6 @@ class KnapsackProblem :
         self.offSpringSize = offSpringSize
         self.nbIterations = nbIterations
         
-
     def initialise(self,populationSize):
         self.populationSize = populationSize
         self.individuals = np.ndarray((populationSize,self.numObjects), dtype=int)
@@ -38,8 +37,6 @@ class KnapsackProblem :
         print("ProblemParam:")
         print("numObjects: ",self.numObjects," populationSize: ",self.populationSize," offSpringSize: ",self.offSpringSize," k_selection: ",self.k_selection,"nbIterations: ",self.nbIterations)
     
-   
-
     def printProblem(self):
         print("ProblemValues:")
         #print("index: \n",np.arange(self.numObjects))
@@ -149,7 +146,7 @@ class KnapsackProblem :
         bestFitness = self.fitnessIndividual(individual)
         bestInd = individual
         copyInd = np.copy(individual)
-        firstloc = individual[0]
+        
         for i in range(1,self.numObjects):
             #Insert
             copyInd[0] = individual[i]
