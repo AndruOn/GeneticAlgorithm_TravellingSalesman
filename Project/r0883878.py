@@ -460,6 +460,7 @@ class r0883878:
 				onePlusBeta += 1 - (d/self.sigma)**self.alpha
 
 		fval = individual.cost(self.distanceMatrix)
+		#print("fval:",fval,"onePlusBeta:",onePlusBeta)
 		return fval * onePlusBeta**np.sign(fval)
 
 	def getHammingMatrix(self, pop : np.array(Individual)):
@@ -524,10 +525,10 @@ class r0883878:
 		return population[random_index_Sample[best_index]]
 
 	def getDivesityIndicator(self, population : np.array(Individual)) -> float:
-		meanDistances = np.ndarray(population.size, dtype=float)
+		totalDistances = 0.0
 		for i, ind in enumerate(population):
-			meanDistances[i] = np.mean(self.getDistances(ind,population)) 
-		return np.mean(meanDistances) / self.populationsize
+			totalDistances += np.mean(self.getDistances(ind,population)) 
+		return (totalDistances / self.populationsize) / self.populationsize
 
 #-----------------MAIN LOOP--------------------------------------
 	# The evolutionary algorithm's main loop
@@ -575,6 +576,7 @@ class r0883878:
 			reportTotal = 0.0
 			elimTotal = 0.0
 			AssesQualityTotal = 0.0
+			reDiversityTotal = 0.0
 			itertotal = 0.0
 
 		i=0
@@ -602,7 +604,6 @@ class r0883878:
 				sharedCosts = self.sharedCostPopulation(self.population,subPopulation_sharedCost)
 			for j in range(self.populationsize//2):
 				#crossover
-				#TODO remove if non diversity selection
 				p1 = self.selection(sharedCosts)
 				p2 = self.selection(sharedCosts)
 				if self.LsoToParents :
@@ -614,6 +615,9 @@ class r0883878:
 					offsprings[nbr_offspring] = self.mutation(new_individuals[0], self.numberOfSwitches)
 					offsprings[nbr_offspring+1] = self.mutation( new_individuals[1], self.numberOfSwitches)
 					nbr_offspring += 2
+				else:
+					self.mutation(p1, self.numberOfSwitches)
+					self.mutation(p2, self.numberOfSwitches)
 
 			offsprings.resize(nbr_offspring)
 			
@@ -667,6 +671,22 @@ class r0883878:
 
 			if self.timeSteps:
 				AssesQualityTime = time.time() - AssesQualityStart
+				reDiversityStart = time.time()
+
+
+			#if diversity is dead relaunch 30% of population big mutation
+			if self.reDiversitification and diversityIndicator < 0.03:
+				NbOfIndivToMutate = round(self.population.size * 0.3)
+				#print("NbOfWorstOnes:",NbOfWorstOnes)
+				#print("self.getWorstOnes(newPopulation, NbOfWorstOnes):",self.getWorstOnes(newPopulation, NbOfWorstOnes))
+				subPopu = self.getRandomSubset(newPopulation, NbOfIndivToMutate)
+				for ind in subPopu:
+					self.mutation_scramble(ind) 
+					self.mutation_scramble(ind)
+				self.lsoInit_(subPopu)
+
+			if self.timeSteps:
+				reDiversityTime = time.time() - reDiversityStart
 				ReportStart = time.time()
 
 
@@ -690,15 +710,15 @@ class r0883878:
 				LsoTotal += LsoTime 
 				elimTotal += elimTime 
 				AssesQualityTotal += AssesQualityTime 
+				reDiversityTotal += reDiversityTime
 				reportTotal += ReportTime
 				itertotal += iterTime
-
-
 
 				print("TIME: selectTime:      ",selectTime,"=>", selectTime/iterTime * 100)
 				print("TIME: LsoTime:         ",LsoTime,"=>", LsoTime/iterTime * 100)
 				print("TIME: elimTime:        ",elimTime,"=>", elimTime/iterTime * 100)
 				print("TIME: AssesQualityTime:",AssesQualityTime,"=>", AssesQualityTime/iterTime * 100)
+				print("TIME: reDiversityTime: ",reDiversityTime,"=>", reDiversityTime/iterTime * 100)
 				print("TIME: ReportTime:      ",ReportTime,"=>", ReportTime/iterTime * 100)
 				print("TIME: Total iterTime:  ",iterTime,"=>", 100)
 				print("TOTAL TIME:", time.time() - initStart)
@@ -720,16 +740,26 @@ class r0883878:
 			fParams.write("""I: {i} meanObjective:{meanObj} bestObjective:{bestObjective} diff:{diff}\n
 				diversityIndicator:{diversityIndicator}\n
 				 k_selection:{k_selection} k_elimination:{k_selection}\n
-				 mean_mutation:{mean_mutation} mean_crossover{mean_mutation}\n
+				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}\n
 				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity}\n
 				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}\n
-				 percentOfPopuLso:{percentOfPopuLso}
+				 percentOfPopuLso:{percentOfPopuLso}\n reDiversificationScheme:{reDiversity}
 				""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
 				, diversityIndicator=diversityIndicator, k_selection=self.k_selection, k_elimination=self.k_elimination, 
 				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,
 				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,
 				LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
-				percentOfPopuLso=self.percentOfPopuLso))
+				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification))
+			
+			fParams.write("\nTIME: selectTime:      {meanselect}=>{pSelect}\n".format(meanselect=selectTotal / i, pSelect=selectTotal / itertotal * 100))
+			fParams.write("TIME: LsoTime:         {meanLso}=>{pLso}\n".format(meanLso=LsoTotal / i, pLso=LsoTotal / itertotal * 100))
+			fParams.write("TIME: elimTime:        {meanElim}=>{pElim}\n".format(meanElim=elimTotal / i, pElim=elimTotal / itertotal * 100))
+			fParams.write("TIME: AssesQualityTime:{meaAsses}=>{pAsses}\n".format(meaAsses=AssesQualityTotal / i, pAsses=AssesQualityTotal / itertotal * 100))
+			fParams.write("TIME: ReDiversityTime:{meanReDIversity}=>{pReDIversity}\n".format(meanReDIversity=reDiversityTotal / i, pReDIversity=reDiversityTotal / itertotal * 100))
+			fParams.write("TIME: ReportTime:      {meanReport}=>{pReport}\n".format(meanReport=reportTotal / i, pReport=reportTotal / itertotal * 100))
+			fParams.write("TIME: Total iterTime:  {meanIter}=>{pIter}\n".format(meanIter=itertotal / i, pIter=100))
+			fParams.write("TOTAL TIME:"+ str(time.time() - initStart))
+				
 
 		print(self.str_param())
 
@@ -763,27 +793,29 @@ class r0883878:
 				print("TIME: LsoTime:         ",LsoTotal / i,"=>", LsoTotal / itertotal * 100)
 				print("TIME: elimTime:        ",elimTotal / i,"=>", elimTotal / itertotal * 100)
 				print("TIME: AssesQualityTime:",AssesQualityTotal / i,"=>", AssesQualityTotal / itertotal * 100)
+				print("TIME: ReDiversityTime:{meanReDIversity}=>{pReDIversity}".format(meanReDIversity=reDiversityTotal / i, pReDIversity=reDiversityTotal / itertotal * 100))
 				print("TIME: ReportTime:      ",reportTotal / i,"=>", reportTotal / itertotal * 100)
 				print("TIME: Total iterTime:  ",itertotal / i,"=>", 100)
 				print("TOTAL TIME:", time.time() - initStart)
 				print("--------------------------------------------------------------------------------")	
 		return 0
 
-
 #-----------------CHOOSE OPERATORS--------------------------------------
 	#OPTIONS
 	printEveryIter = True
 	AssesQuality = True
 	timeSteps = True
-	minSecLeft = 100
+	minSecLeft = 30
 
-	min_k_value = 3
+	min_k_value = 2
 	max_k_value = 15
 	min_crossover = 0.7
 	min_mutation = 0.1
 
 	selectionDiversity = True
 	eliminationDiversity = False
+
+	reDiversitification = True
 
 	"""selection & elimination"""
 	def selection(self, sharedCosts = None) -> Individual:
@@ -817,20 +849,19 @@ class r0883878:
 	LsoToParents = False
 	LsoToWorstOnes = True #mutate hard (scramble) then lso worst ones
 	LsoToRandomSubset = False
-	percentOfPopuLso = 0.2
+	percentOfPopuLso = 0.4
 	
 	#DEPRECTED
 	def costWrapper(self, individuals : np.array(Individual), population : np.array(Individual), betaInit = 0):
 		return self.sharedCostPopulation(individuals, population, betaInit = betaInit)
 	
 
-
 if __name__== "__main__":
 
 	r = r0883878(
-		populationsize = 300, init_k_selection = 5, percentageOfSwitches = 0.2, init_k_elimination = 5,
+		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.2, init_k_elimination = 5,
 	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
-	 	iterations = 200, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
-		sharedCost_alpha = 3, sharedCost_percentageOfSearchSpace = 0.2) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
+	 	iterations = 300, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
+		sharedCost_alpha = 3, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
 	r.optimize("tourData/tour250.csv")
 	
