@@ -518,7 +518,7 @@ class r0883878:
 			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, fvals, betaInit=1.0)
 			
 			#k_tournament
-			random_index_Sample = sample(range(subPopulation.size), self.k_elimination)
+			random_index_Sample = sample(range(subPopulation.size), round(self.numberOfCities * 0.1)) #TODO new
 			idx = random_index_Sample[ np.argmin(fvals[random_index_Sample]) ]
 
 			#idx = np.argmin(fvals)
@@ -771,7 +771,7 @@ class r0883878:
 				diversityIndicator:{diversityIndicator}\n
 				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}
 				 min_mutation:{minMutation} min_crossover:{minCrossover}\n
-				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity}\n
+				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity} percentageCostSharing:{percentageCostSharing}\n
 				 LsoInit:{LsoInit}
 				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}
 				 percentOfPopuLso:{percentOfPopuLso}\n 
@@ -780,7 +780,8 @@ class r0883878:
 				""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
 				, diversityIndicator=diversityIndicator,
 				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,minMutation=self.min_mutation, minCrossover=self.min_crossover,
-				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,LsoInit=self.LsoInit,
+				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,percentageCostSharing = self.percentageCostSharing,
+				LsoInit=self.LsoInit,
 				LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
 				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification,
 				Hardmutation=self.RandomHardMutationThenLso, percentHardMutation=self.percentHardMutation))
@@ -877,16 +878,16 @@ class r0883878:
 	max_k_value = 15
 	min_crossover = 0.7
 	min_mutation = 0.1
-	RandomHardMutationThenLso = True
+	RandomHardMutationThenLso = False
 	percentHardMutation = 0.2
 	"""Local Search Operator"""
 	LsoInit = False
 	LsoToParents = False
-	LsoToWorstOnes = False #for worst ones:  lso (take first better)
+	LsoToWorstOnes = True #for worst ones:  lso (take first better)
 	LsoToRandomSubset = True  #for random subset:  lso (take first better)
 	percentOfPopuLso = 0.25 # Probability of the population
 	"""Diversity"""
-	percentageCostSharing = 0.8 #percentage of population taken into account when calculating the shared cost
+	percentageCostSharing = 0.7 #percentage of population taken into account when calculating the shared cost
 	selectionDiversity = False
 	eliminationDiversity = True
 
@@ -904,6 +905,6 @@ if __name__== "__main__":
 	r = r0883878(
 		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.2, init_k_elimination = 5,
 	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
-	 	iterations = 100, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
+	 	iterations = 500, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
 		sharedCost_alpha = 3, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
 	r.optimize("tourData/tour250.csv")

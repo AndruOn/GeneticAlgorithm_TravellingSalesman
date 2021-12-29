@@ -27,6 +27,7 @@ axs[0, 1].set_ylim(top= 1.0)
 axs[0, 0].legend()
 #Diversity 
 axs[0, 1].plot(iter, diversityIndicator,label = "diversity Indicator")
+axs[0, 1].plot(iter, np.full(iter.size,np.mean(diversityIndicator)), '-.', label = "diversity mean")
 axs[0, 1].set_title('Diversity')
 axs[0, 1].set_ylabel('DIversity')
 axs[0, 1].set_ylim(bottom=0.0, top= np.max(diversityIndicator)*1.1)
