@@ -53,9 +53,6 @@ import sys
 
 class r0883878:
 
-	
-	
-
 #-----------------SETUP--------------------------------------
 	def __init__(self, populationsize, perturbation_prob, init_k_selection, percentageOfSwitches, init_k_elimination,
 	 init_mutation_proba, init_crossover_proba, iterations, genForConvergence, stoppingConvergenceSlope, sharedCost_alpha, sharedCost_percentageOfSearchSpace):
@@ -487,24 +484,44 @@ class r0883878:
 		fval = individual.cost(self.distanceMatrix)
 		return fval * onePlusBeta
 
-	def sharedCostPopulationOpti(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, distaceMatrix, betaInit = 0):
+	def sharedCostPopulationOptiOld(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, distaceMatrix, fvals : np.array(float), betaInit = 0):
 		sharedCosts = np.zeros( np.size(individuals), dtype=float )
 
 		for i, ind in enumerate(individuals):
 			sharedCosts[i] = self.sharedCostOpti(compareTo, ind, proximityDict[i], distaceMatrix[i], betaInit)
 		return sharedCosts
 
+	def sharedCostPopulationOpti(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, distaceMatrix, fvals : np.array(float), betaInit = 0):
+		newSurvivor = compareTo[compareTo.size - 1]
+		for index in proximityDict[newSurvivor]:
+			fvals[index] = self.sharedCostOpti(compareTo, individuals[index], proximityDict[index], distaceMatrix[index], betaInit)
+		return fvals
+
+
 	def eliminationDiversityPromotionOpti(self, pop : np.array(Individual), NbSurvivors : int, percentagePopu : float) -> np.array(Individual):
+		 #setup do most calculation just once
 		survivors = np.ndarray(NbSurvivors, dtype = Individual)
 		survivors_indexes = np.ndarray(NbSurvivors, dtype = int)
 		subPopulation = np.random.choice(pop, round(percentagePopu * pop.size))
 		distMatrix = self.getHammingMatrix(subPopulation)
 		proximityDic = self.getDictProximity(distMatrix, subPopulation)
 
-		for i in range(NbSurvivors):
-			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, betaInit=1.0)
+		fvals = self.getFitnessPopulation(subPopulation)
+
+		#fisrt survivor
+		idx = np.argmin(fvals)
+		survivors_indexes[0] = idx
+		survivors[0] = subPopulation[idx]
+
+		#loop to get all survivors
+		for i in range(1,NbSurvivors):
+			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, fvals, betaInit=1.0)
 			
-			idx = np.argmin(fvals)
+			#k_tournament
+			random_index_Sample = sample(range(subPopulation.size), self.k_elimination)
+			idx = random_index_Sample[ np.argmin(fvals[random_index_Sample]) ]
+
+			#idx = np.argmin(fvals)
 
 			survivors_indexes[i] = idx
 			survivors[i] = subPopulation[idx]
@@ -528,7 +545,12 @@ class r0883878:
 		totalDistances = 0.0
 		for i, ind in enumerate(population):
 			totalDistances += np.mean(self.getDistances(ind,population)) 
-		return (totalDistances / self.populationsize) / self.populationsize
+		return (totalDistances / self.populationsize) / self.numberOfCities
+
+	def getDivesityIndicatorNew(self, population : np.array(Individual)) -> float:
+		distMatrix = self.getHammingMatrix(population)
+		return distMatrix.mean() / self.numberOfCities
+
 
 #-----------------MAIN LOOP--------------------------------------
 	# The evolutionary algorithm's main loop
@@ -554,7 +576,9 @@ class r0883878:
 				"k_selection:",self.k_selection,"k_elimination:",self.k_elimination ,
 				"mean_mutation:",self.meanMutation,"mean_crossover:",self.meanCrossover)
 		#LSO initital
-		r.lsoInit_(self.population)
+		if self.LsoInit:
+			r.lsoInit_(self.population)
+
 		(meanObjective, bestObjective, bestSolution) = self.accessQualityOfGeneration(self.population)
 		if self.AssesQuality : 
 			print("AFTER LSO Init meanObjective:",meanObjective,", bestObjective:",bestObjective,"diff:",meanObjective-bestObjective,
@@ -623,6 +647,12 @@ class r0883878:
 			
 			newPopulation = np.concatenate((self.population,offsprings))
 
+			if self.RandomHardMutationThenLso:
+				NbRandoms = round(self.population.size * self.percentHardMutation)
+				for ind in self.getRandomSubset(newPopulation, NbRandoms):
+					self.mutation_scramble(ind)
+					self.lsoGeneration_(ind)
+
 			if self.timeSteps:
 				selectTime = time.time() - selectStart
 				LsoStart = time.time()
@@ -632,13 +662,13 @@ class r0883878:
 				#print("NbOfWorstOnes:",NbOfWorstOnes)
 				#print("self.getWorstOnes(newPopulation, NbOfWorstOnes):",self.getWorstOnes(newPopulation, NbOfWorstOnes))
 				for index in self.getWorstOnesIndex(newPopulation, NbOfWorstOnes):
-					self.mutation_scramble(newPopulation[index]) # TODO NEWWWWWW
+					#self.mutation_scramble(newPopulation[index]) 
 					self.lsoGeneration_(newPopulation[index])
 			
 			if self.LsoToRandomSubset : 
 				NbRandoms = round(self.population.size * self.percentOfPopuLso)
 				for ind in self.getRandomSubset(newPopulation, NbRandoms):
-					self.mutation_scramble(ind)
+					#self.mutation_scramble(ind)
 					self.lsoGeneration_(ind)
 
 			if self.timeSteps:
@@ -675,7 +705,7 @@ class r0883878:
 
 
 			#if diversity is dead relaunch 30% of population big mutation
-			if self.reDiversitification and diversityIndicator < 0.03:
+			if self.reDiversitification and diversityIndicator < 0.1:
 				NbOfIndivToMutate = round(self.population.size * 0.3)
 				#print("NbOfWorstOnes:",NbOfWorstOnes)
 				#print("self.getWorstOnes(newPopulation, NbOfWorstOnes):",self.getWorstOnes(newPopulation, NbOfWorstOnes))
@@ -737,19 +767,23 @@ class r0883878:
 		#store last params
 		with open('lastParams.txt', 'w') as fParams:
 			fParams.write(self.str_param())
-			fParams.write("""I: {i} meanObjective:{meanObj} bestObjective:{bestObjective} diff:{diff}\n
+			fParams.write("""I: {i} meanObjective:{meanObj} bestObjective:{bestObjective} diff:{diff}
 				diversityIndicator:{diversityIndicator}\n
-				 k_selection:{k_selection} k_elimination:{k_selection}\n
-				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}\n
+				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}
+				 min_mutation:{minMutation} min_crossover:{minCrossover}\n
 				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity}\n
-				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}\n
-				 percentOfPopuLso:{percentOfPopuLso}\n reDiversificationScheme:{reDiversity}
+				 LsoInit:{LsoInit}
+				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}
+				 percentOfPopuLso:{percentOfPopuLso}\n 
+				 reDiversificationScheme:{reDiversity}
+				 RandomHardMutationThenLso:{Hardmutation} percentHardMutation = {percentHardMutation}
 				""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
-				, diversityIndicator=diversityIndicator, k_selection=self.k_selection, k_elimination=self.k_elimination, 
-				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,
-				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,
+				, diversityIndicator=diversityIndicator,
+				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,minMutation=self.min_mutation, minCrossover=self.min_crossover,
+				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,LsoInit=self.LsoInit,
 				LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
-				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification))
+				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification,
+				Hardmutation=self.RandomHardMutationThenLso, percentHardMutation=self.percentHardMutation))
 			
 			fParams.write("\nTIME: selectTime:      {meanselect}=>{pSelect}\n".format(meanselect=selectTotal / i, pSelect=selectTotal / itertotal * 100))
 			fParams.write("TIME: LsoTime:         {meanLso}=>{pLso}\n".format(meanLso=LsoTotal / i, pLso=LsoTotal / itertotal * 100))
@@ -801,21 +835,6 @@ class r0883878:
 		return 0
 
 #-----------------CHOOSE OPERATORS--------------------------------------
-	#OPTIONS
-	printEveryIter = True
-	AssesQuality = True
-	timeSteps = True
-	minSecLeft = 30
-
-	min_k_value = 2
-	max_k_value = 15
-	min_crossover = 0.7
-	min_mutation = 0.1
-
-	selectionDiversity = True
-	eliminationDiversity = False
-
-	reDiversitification = True
 
 	"""selection & elimination"""
 	def selection(self, sharedCosts = None) -> Individual:
@@ -826,8 +845,7 @@ class r0883878:
 		if self.eliminationDiversity:
 			return self.eliminationDiversityPromotionOpti(oldPopulation, self.populationsize, self.percentageCostSharing)
 		return self.elimination_kTournament(oldPopulation, self.populationsize)
-	"""Diversity"""
-	percentageCostSharing = 0.5 #percentage of population taken into account when calculating the shared cost
+	
 	
 	"""mutation"""
 	def mutation(self, individual : Individual, numberofswitches):
@@ -846,22 +864,46 @@ class r0883878:
 			population[i] = self.lsoInsert(population[i],"best")
 	def lsoGeneration_(self, individual : Individual):
 		self.lsoSwap(individual,"first")
-	LsoToParents = False
-	LsoToWorstOnes = True #mutate hard (scramble) then lso worst ones
-	LsoToRandomSubset = False
-	percentOfPopuLso = 0.4
-	
-	#DEPRECTED
-	def costWrapper(self, individuals : np.array(Individual), population : np.array(Individual), betaInit = 0):
-		return self.sharedCostPopulation(individuals, population, betaInit = betaInit)
-	
 
+
+#-----------------OPTIONS--------------------------------------
+	printEveryIter = True
+	AssesQuality = True
+	timeSteps = True
+	minSecLeft = 30
+
+	"""Mutation Selection"""
+	min_k_value = 3
+	max_k_value = 15
+	min_crossover = 0.7
+	min_mutation = 0.1
+	RandomHardMutationThenLso = True
+	percentHardMutation = 0.2
+	"""Local Search Operator"""
+	LsoInit = False
+	LsoToParents = False
+	LsoToWorstOnes = False #for worst ones:  lso (take first better)
+	LsoToRandomSubset = True  #for random subset:  lso (take first better)
+	percentOfPopuLso = 0.25 # Probability of the population
+	"""Diversity"""
+	percentageCostSharing = 0.8 #percentage of population taken into account when calculating the shared cost
+	selectionDiversity = False
+	eliminationDiversity = True
+
+	reDiversitification = False
+
+	"""
+	BAD: Mutation min 0.05 or lower
+	bad But need to tune: Search space space 0.01
+	TOTEST: Elim keep the fvals and only change the ones that are in dic[newsurvivor]
+	"""
+	
+	
 if __name__== "__main__":
 
 	r = r0883878(
 		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.2, init_k_elimination = 5,
 	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
-	 	iterations = 300, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
+	 	iterations = 100, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
 		sharedCost_alpha = 3, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
 	r.optimize("tourData/tour250.csv")
-	
