@@ -230,16 +230,16 @@ class r0883878:
 		#print("mutate_k k_elimination return", ind.k_elimination)
 	
 	def mutate_probaMutation(self, percent : float) -> float:
-		newPercent = percent + 0.1 * random() - 0.5
+		newPercent = percent + 0.1 * (random() - 0.5)
 		return min(1.0, max(self.min_mutation , newPercent))
 
 	def mutate_probaCrossover(self, percent : float) -> float:
-		newPercent = percent + 0.1 * random() - 0.5
+		newPercent = percent + 0.1 * (random() - 0.5)
 		return min(1.0, max(self.min_crossover , newPercent))
 	
 	def mutate_k(self, k : int):
 		#return k
-		beta = int(5* random() - 2)
+		beta = int((5*random()) - 2)
 		#print("mutate_k beta:",beta,"oldK:",k)
 		newK = max(self.min_k_value, min(self.max_k_value , k+beta))
 		return newK
@@ -629,6 +629,11 @@ class r0883878:
 			if self.selectionDiversity:
 				subPopulation_sharedCost = np.random.choice(self.population, round(self.population.size * self.percentageCostSharing))
 				sharedCosts = self.sharedCostPopulation(self.population,subPopulation_sharedCost)
+
+			for ind in self.population:
+				self.mutation(ind,self.numberOfSwitches)
+
+
 			for j in range(self.populationsize//2):
 				#crossover
 				p1 = self.selection(sharedCosts)
@@ -640,11 +645,8 @@ class r0883878:
 				new_individuals = self.crossover(p1,p2,self.numberOfSwitches)
 				if not (new_individuals is None) : #mutate the offsprings
 					offsprings[nbr_offspring] = self.mutation(new_individuals[0], self.numberOfSwitches)
-					offsprings[nbr_offspring+1] = self.mutation( new_individuals[1], self.numberOfSwitches)
+					offsprings[nbr_offspring+1] = self.mutation(new_individuals[1], self.numberOfSwitches)
 					nbr_offspring += 2
-				else:
-					self.mutation(p1, self.numberOfSwitches)
-					self.mutation(p2, self.numberOfSwitches)
 
 			offsprings.resize(nbr_offspring)
 			
@@ -881,15 +883,15 @@ class r0883878:
 	min_k_value = 3
 	max_k_value = 15
 	min_crossover = 0.8
-	min_mutation = 0.3
+	min_mutation = 0.1
 	RandomHardMutationThenLso = False
-	percentHardMutation = 0.2
+	percentHardMutation = 0.1
 	"""Local Search Operator"""
-	LsoInit = False
+	LsoInit = True
 	LsoToParents = False
 	LsoToWorstOnes = True #for worst ones:  lso (take first better)
 	LsoToRandomSubset = True  #for random subset:  lso (take first better)
-	percentOfPopuLso = 0.2 # Probability of the population
+	percentOfPopuLso = 0.1 # Probability of the population
 	"""Diversity"""
 	percentageCostSharing = 0.7 #percentage of population taken into account when calculating the shared cost
 	selectionDiversity = False
@@ -908,10 +910,10 @@ class r0883878:
 if __name__== "__main__":
 
 	r = r0883878(
-		populationsize = 100, init_k_selection = 5, percentageOfSwitches = 0.1, init_k_elimination = 5,
+		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.1, init_k_elimination = 5,
 	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
 	 	iterations = 500, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
 		sharedCost_alpha = 1, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
 	
 	r.k_elimDiversity = round(0.25 * r.populationsize)
-	r.optimize("tourData/tour750.csv")
+	r.optimize("tourData/tour250.csv")
