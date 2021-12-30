@@ -1,5 +1,0 @@
-group report:
-	r = r0883878(
-		populationsize = 50, k_selection = 2, percentageOfSwitches = 0.1, k_elimination = 3,
-	 	mutation_proba = 0.4, crossover_proba = 0.8, 
-	 	iterations = 100, genForConvergence = 5, stoppingConvergenceSlope = 0.0001)

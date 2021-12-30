@@ -403,7 +403,7 @@ class r0883878:
 		copyPath = copyInd.path
 		individualPath = individual.path
 		lengthOfPath = self.numberOfCities-1
-		for i in range(lengthOfPath):
+		for i in np.random.permutation(range(lengthOfPath)):
 			j = (i + 1) % lengthOfPath
 			#Swap adjacent position
 			copyPath[j] = individualPath[i]
@@ -518,11 +518,12 @@ class r0883878:
 			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, fvals, betaInit=1.0)
 			
 			#k_tournament
-			random_index_Sample = sample(range(subPopulation.size), round(self.numberOfCities * 0.1)) #TODO new
+			random_index_Sample = sample(range(subPopulation.size), self.k_elimDiversity) 
 			idx = random_index_Sample[ np.argmin(fvals[random_index_Sample]) ]
-
-			#idx = np.argmin(fvals)
-
+			"""
+			#best one
+			idx = np.argmin(fvals)
+			"""
 			survivors_indexes[i] = idx
 			survivors[i] = subPopulation[idx]
 		
@@ -551,7 +552,6 @@ class r0883878:
 		distMatrix = self.getHammingMatrix(population)
 		return distMatrix.mean() / self.numberOfCities
 
-
 #-----------------MAIN LOOP--------------------------------------
 	# The evolutionary algorithm's main loop
 	def optimize(self, filename):
@@ -565,6 +565,9 @@ class r0883878:
 
 		#SETUP of The problem
 		self.numberOfCities = len(self.distanceMatrix)
+
+		self.k_elimDiversity = round(self.numberOfCities * 0.1)
+
 		self.sigma = round(self.sharedCost_percentageOfSearchSpace * self.getSearchSpace(self.numberOfCities))
 		self.numberOfSwitches = int(self.percentageOfSwitches * self.numberOfCities)
 		self.initialisation(self.perturbation_prob)
@@ -647,15 +650,15 @@ class r0883878:
 			
 			newPopulation = np.concatenate((self.population,offsprings))
 
+			if self.timeSteps:
+				selectTime = time.time() - selectStart
+				LsoStart = time.time()
+
 			if self.RandomHardMutationThenLso:
 				NbRandoms = round(self.population.size * self.percentHardMutation)
 				for ind in self.getRandomSubset(newPopulation, NbRandoms):
 					self.mutation_scramble(ind)
 					self.lsoGeneration_(ind)
-
-			if self.timeSteps:
-				selectTime = time.time() - selectStart
-				LsoStart = time.time()
 
 			if self.LsoToWorstOnes : 
 				NbOfWorstOnes = round(self.population.size * self.percentOfPopuLso)
@@ -771,7 +774,7 @@ class r0883878:
 				diversityIndicator:{diversityIndicator}\n
 				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}
 				 min_mutation:{minMutation} min_crossover:{minCrossover}\n
-				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity} percentageCostSharing:{percentageCostSharing}\n
+				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity} percentageCostSharing:{percentageCostSharing} k_elimDiversity:{k_elimDiversity}\n
 				 LsoInit:{LsoInit}
 				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}
 				 percentOfPopuLso:{percentOfPopuLso}\n 
@@ -780,7 +783,7 @@ class r0883878:
 				""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
 				, diversityIndicator=diversityIndicator,
 				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,minMutation=self.min_mutation, minCrossover=self.min_crossover,
-				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,percentageCostSharing = self.percentageCostSharing,
+				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,percentageCostSharing = self.percentageCostSharing,k_elimDiversity=self.k_elimDiversity,
 				LsoInit=self.LsoInit,
 				LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
 				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification,
@@ -806,6 +809,7 @@ class r0883878:
 		print("tour29: simple greedy heuristic : 30350")
 		print("tour100: simple greedy heuristic 272865")
 		print("tour250: simple greedy heuristic 49889")
+		print("tour750: simple greedy heuristic 119156")
 		"""
 		tour29: simple greedy heuristic 30350
 		tour100: simple greedy heuristic 272865
@@ -876,8 +880,8 @@ class r0883878:
 	"""Mutation Selection"""
 	min_k_value = 3
 	max_k_value = 15
-	min_crossover = 0.7
-	min_mutation = 0.1
+	min_crossover = 0.8
+	min_mutation = 0.3
 	RandomHardMutationThenLso = False
 	percentHardMutation = 0.2
 	"""Local Search Operator"""
@@ -885,11 +889,12 @@ class r0883878:
 	LsoToParents = False
 	LsoToWorstOnes = True #for worst ones:  lso (take first better)
 	LsoToRandomSubset = True  #for random subset:  lso (take first better)
-	percentOfPopuLso = 0.25 # Probability of the population
+	percentOfPopuLso = 0.2 # Probability of the population
 	"""Diversity"""
 	percentageCostSharing = 0.7 #percentage of population taken into account when calculating the shared cost
 	selectionDiversity = False
 	eliminationDiversity = True
+	k_elimDiversity = None #done in the main
 
 	reDiversitification = False
 
@@ -903,8 +908,10 @@ class r0883878:
 if __name__== "__main__":
 
 	r = r0883878(
-		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.2, init_k_elimination = 5,
+		populationsize = 100, init_k_selection = 5, percentageOfSwitches = 0.1, init_k_elimination = 5,
 	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
 	 	iterations = 500, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
-		sharedCost_alpha = 3, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
-	r.optimize("tourData/tour250.csv")
+		sharedCost_alpha = 1, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
+	
+	r.k_elimDiversity = round(0.25 * r.populationsize)
+	r.optimize("tourData/tour750.csv")
