@@ -10,86 +10,70 @@ from copy import deepcopy
 from random import sample
 from scipy.spatial import distance
 import time
-import sys
-
-#TODO:
-#	- more crossover
-#	- relaunch diversity if converges
-#	- multithreading only 2 available threads
-#	- measure selective pressure(module2Q&A) and diversity
-#	- mutation to more than just offspring
-
-
-#DONE
-#	- self adaptivity (mutation prob,crosssover_prob,...?) 
-#		have to find a better way to mutate crossoover k
-#	- object? (i think array are faster but with objects can change more quicker)
-#	- more mutation
-#	- local search operators ======================================http://www.info.univ-angers.fr/~goeffon/Publi/LION15a.pdf
-#		composed of neighbourhood and selector
-#			neighbourhood: swap, insertion, interchange
-#			selector: first improvement, best improvement ( and randomchoice does not make sense)
-#		on who:
-#			init: everybody 
-#			generation: 
-# 				everybody if cheap
-# 				some if expensive: random subset, worst ones, parents(selected and before creating offsprings)
-#	- diversity promotion
-#		-new objective funct with distance
-#		-selection sharedfitness
-#		-shared elimination
-#		-measure diversity
-
-
-#Questions
-#	- what is a good mutation:crossover for k_values
-#	- what is a good min K_value? 2 ?  3 ? 5 ?
-#	- lacking selective pressure what to do ?
-#	- LSO random choice? is it relevant? think not
-#	- island model subpopulations ?
-#	- crowding
 
 
 
 class r0883878:
+	class Individual:
+
+		def __init__(self, numberOfCities=None, perturbation_prob=None, 
+			base_mutation_proba=None, base_crossover_proba=None, 
+			init_k_selection=None, init_k_elimination=None):
+			if (numberOfCities != None):
+				self.path = np.random.permutation(np.arange(1,numberOfCities))
+			if (base_mutation_proba != None):
+				self.mutation_proba = self.floatToPercentage( base_mutation_proba + np.random.uniform(-perturbation_prob,perturbation_prob) )
+			if (base_crossover_proba != None):
+				self.crossover_proba = self.floatToPercentage( base_crossover_proba + np.random.uniform(-perturbation_prob,perturbation_prob) )
+			if (init_k_selection != None):
+				self.k_selection = self.kinInterval( init_k_selection + np.random.randint(0,4) - 2 )
+			if (init_k_elimination != None):
+				self.k_elimination = self.kinInterval( init_k_elimination + np.random.randint(0,4) - 2 )
+
+
+		def cost(self, distanceMatrix) -> np.double:
+			totalCost = distanceMatrix[0][self.path[0]]
+			for i in range(len(self.path)-1):
+				cost = distanceMatrix[self.path[i]][self.path[i+1]]
+				if cost == np.inf:
+					totalCost += 10^20
+				else:
+					totalCost += cost
+			totalCost+= distanceMatrix[self.path[len(self.path)-1]][0]
+			return totalCost
+
+		def floatToPercentage(self,val) -> float:
+			return min(1.0, max(0.0 , val))
+
+		def kinInterval(selk, k):
+			return min(10,max(k,1))
+
+		def __str__(self) -> str:
+			return "Individual: mutation:{mutation} crossover:{crossover} k_selection:{k_selection} k_elimination:{k_elimination} path:{path}".format(
+				mutation = self.mutation_proba, crossover=self.crossover_proba, k_selection=self.k_selection, k_elimination=self.k_elimination, path=self.path)
+
+		def __repr__(self) -> str:
+			return "Individual: mutation:{mutation} crossover:{crossover} k_selection:{k_selection} k_elimination:{k_elimination} path:{path}".format(
+				mutation = self.mutation_proba, crossover=self.crossover_proba, k_selection=self.k_selection, k_elimination=self.k_elimination, path=self.path)
+
 
 #-----------------SETUP--------------------------------------
-	def __init__(self, populationsize, perturbation_prob, init_k_selection, percentageOfSwitches, init_k_elimination,
-	 init_mutation_proba, init_crossover_proba, iterations, genForConvergence, stoppingConvergenceSlope, sharedCost_alpha, sharedCost_percentageOfSearchSpace):
-
-		self.populationsize = populationsize
-		#selection
-		self.init_k_selection = init_k_selection
-		self.k_selection = init_k_selection
-		#elimination
-		self.init_k_elimination = init_k_elimination
-		self.k_elimination = init_k_elimination
-		#mutation
-		self.perturbation_prob = perturbation_prob
-		self.percentageOfSwitches = percentageOfSwitches
-		self.init_mutation_proba = init_mutation_proba
-		self.init_crossover_proba = init_crossover_proba
-		#stopping criteria
-		self.iterations = iterations
-		self.genForConvergence = genForConvergence
-		self.stoppingConvergenceSlope = stoppingConvergenceSlope
-
+	def __init__(self):
 		self.reporter = Reporter.Reporter(self.__class__.__name__)
-
 		self.population = None
 		self.distanceMatrix = None
 		self.numberOfCities = None
 
-		#diversity
-		self.alpha = sharedCost_alpha
-		self.sharedCost_percentageOfSearchSpace = sharedCost_percentageOfSearchSpace
-
 	#Initializes the population
-	def initialisation(self, perturbation_prob : float):
+	def initialisation_random(self, perturbation_prob : float):
 		self.population = np.ndarray(dtype=Individual ,shape=(self.populationsize))
 		for i in range(self.populationsize):
 			self.population[i] =  Individual(self.numberOfCities, perturbation_prob, self.init_mutation_proba, self.init_crossover_proba,
 									self.init_k_selection, self.init_k_elimination)
+	def initialisation(self, perturbation_prob : float):
+		return self.nearest_neighbour_heuristic_init(perturbation_prob)
+
+
 
 #-----------------PRINTS--------------------------------------
 	def str_param(self):
@@ -119,7 +103,7 @@ class r0883878:
 		""".format(_1=self.populationsize,_2=self.init_k_selection,_21=self.k_selection,_3=self.percentageOfSwitches,_4=self.init_k_elimination,
 		_41=self.k_elimination,_5=self. init_mutation_proba,_6=self.init_crossover_proba, _7=self.iterations,_8=self.genForConvergence,
 		_9=self.stoppingConvergenceSlope,_10=self.numberOfCities, nbSwitchies= self.numberOfSwitches,
-		sigma = self.sigma, alpha = self.alpha, percentSearchSpace = self.sharedCost_percentageOfSearchSpace)
+		sigma = self.sigma, alpha = self.sharedCost_alpha, percentSearchSpace = self.sharedCost_percentageOfSearchSpace)
 
 	def printPopulation(self, population : np.array(Individual)):
 		print("Population:[")
@@ -303,7 +287,6 @@ class r0883878:
 				print("slope:",slope[0]/np.mean(means),"lastmeans:",means)
 				return False
 			return flag
-		print()
 		return flag
 
 	def addNewMean(self, means, newMean):
@@ -423,6 +406,63 @@ class r0883878:
 		copyInd.path = bestPath
 
 		return copyInd
+
+	#TODO
+	def nearest_neighbour_heuristic_init(self, perturbation_prob : float):
+		heuristicPopulation = np.ndarray(self.populationsize, dtype = Individual)
+		for i in range(self.populationsize):
+			heuristicPopulation[i] = Individual(self.numberOfCities, perturbation_prob, self.init_mutation_proba, self.init_crossover_proba,
+									self.init_k_selection, self.init_k_elimination)
+			completePath = self.nearest_neighbour_heuristic(self.numberOfCities, randint(0, self.numberOfCities),self.distanceMatrix)
+			#print("completepath:",completePath)
+			heuristicPopulation[i].path = self.reducePath(completePath)
+			#print("reducePath:",heuristicPopulation[i].path )
+			
+		self.population =  heuristicPopulation
+
+	def nearest_neighbour_heuristicOld(self, NbCities : int, start :int, distMatrix):
+		path = np.zeros(NbCities, dtype = int)
+		path[0] = start
+		path[NbCities-1] = 0
+		mask = np.ones(NbCities, dtype=bool) 
+		mask[start] = False
+		mask[0] = False
+
+		for i in range(1,NbCities-1):
+			last = path[i]
+			next_ind = np.argmin(distMatrix[last][mask]) # find minimum of remaining locations
+			next_loc = np.arange(NbCities)[mask][next_ind] # convert to original location
+			path[i] = next_loc
+			mask[next_loc] = False
+
+		return path
+
+#https://stackoverflow.com/questions/17493494/nearest-neighbour-algorithm
+	def nearest_neighbour_heuristic(self, NbCities : int, start :int, distMatrix):
+		path = np.zeros(NbCities, dtype = int)
+		path[0] = start
+		mask = np.ones(NbCities, dtype=bool) 
+		mask[start] = False
+
+		for i in range(1,NbCities):
+			last = path[i-1]
+			next_ind = np.argmin(distMatrix[last][mask]) # find minimum of remaining locations
+			next_loc = np.arange(NbCities)[mask][next_ind] # convert to original location
+			path[i] = next_loc
+			mask[next_loc] = False
+
+		return path
+
+	def reducePath(self, oldPath):
+		N = self.numberOfCities
+		newPath = np.zeros(N-1, dtype = int)
+		i_FirstCity = np.where(oldPath == 0)[0][0]
+		newPath[:N-1-i_FirstCity] = oldPath[i_FirstCity+1:]
+		newPath[N-1-i_FirstCity:] = oldPath[:i_FirstCity]
+
+		return newPath
+
+
 		
 #-----------------DIVERSITY--------------------------------------
 	def getDistances(self, ind : Individual, population : np.array(Individual)) -> np.array(int):
@@ -454,7 +494,7 @@ class r0883878:
 		onePlusBeta = betaInit
 		for d in ds:
 			if d <= self.sigma:
-				onePlusBeta += 1 - (d/self.sigma)**self.alpha
+				onePlusBeta += 1 - (d/self.sigma)**self.sharedCost_alpha
 
 		fval = individual.cost(self.distanceMatrix)
 		#print("fval:",fval,"onePlusBeta:",onePlusBeta)
@@ -473,28 +513,22 @@ class r0883878:
 		return dic
 
 	#OPTI
-	def sharedCostOpti(self, compareTo : np.array(int), individual : Individual, proximityIndexes : np.array(int), distArray : np.array(int), betaInit = 0):
+	def sharedCostOpti(self, compareTo : np.array(int), index_indiv : int, proximityIndexes : np.array(int), distArray : np.array(int), basicCosts : np.array(float), betaInit = 0):
 		onePlusBeta = betaInit
 
 		for i in proximityIndexes:
 			if i in compareTo:
 				d = distArray[i]
-				onePlusBeta += 1 - (d/self.sigma)**self.alpha
+				onePlusBeta += 1 - (d/self.sigma)**self.sharedCost_alpha
 			
-		fval = individual.cost(self.distanceMatrix)
+		fval = basicCosts[index_indiv]
 		return fval * onePlusBeta
 
-	def sharedCostPopulationOptiOld(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, distaceMatrix, fvals : np.array(float), betaInit = 0):
-		sharedCosts = np.zeros( np.size(individuals), dtype=float )
-
-		for i, ind in enumerate(individuals):
-			sharedCosts[i] = self.sharedCostOpti(compareTo, ind, proximityDict[i], distaceMatrix[i], betaInit)
-		return sharedCosts
-
-	def sharedCostPopulationOpti(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, distaceMatrix, fvals : np.array(float), betaInit = 0):
+	def sharedCostPopulationOpti(self, compareTo : np.array(int), individuals : np.array(Individual), proximityDict : dict, 
+		distaceMatrix, fvals : np.array(float), basicCosts : np.array(float), betaInit = 0):
 		newSurvivor = compareTo[compareTo.size - 1]
 		for index in proximityDict[newSurvivor]:
-			fvals[index] = self.sharedCostOpti(compareTo, individuals[index], proximityDict[index], distaceMatrix[index], betaInit)
+			fvals[index] = self.sharedCostOpti(compareTo, index, proximityDict[index], distaceMatrix[index], basicCosts, betaInit)
 		return fvals
 
 
@@ -507,6 +541,7 @@ class r0883878:
 		proximityDic = self.getDictProximity(distMatrix, subPopulation)
 
 		fvals = self.getFitnessPopulation(subPopulation)
+		basicCosts = deepcopy(fvals)
 
 		#fisrt survivor
 		idx = np.argmin(fvals)
@@ -515,7 +550,7 @@ class r0883878:
 
 		#loop to get all survivors
 		for i in range(1,NbSurvivors):
-			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, fvals, betaInit=1.0)
+			fvals = self.sharedCostPopulationOpti( survivors_indexes[0:i], subPopulation, proximityDic, distMatrix, fvals, basicCosts, betaInit=1.0)
 			
 			#k_tournament
 			random_index_Sample = sample(range(subPopulation.size), self.k_elimDiversity) 
@@ -566,7 +601,8 @@ class r0883878:
 		#SETUP of The problem
 		self.numberOfCities = len(self.distanceMatrix)
 
-		self.k_elimDiversity = round(self.numberOfCities * 0.1)
+		
+		self.k_elimDiversity = round(0.1* self.populationsize)
 
 		self.sigma = round(self.sharedCost_percentageOfSearchSpace * self.getSearchSpace(self.numberOfCities))
 		self.numberOfSwitches = int(self.percentageOfSwitches * self.numberOfCities)
@@ -575,6 +611,9 @@ class r0883878:
 		if self.AssesQuality or self.printEveryIter: 
 			self.meanMutation, self.meanCrossover = self.getMeanMutation(),self.getMeanCrossover()
 		if self.AssesQuality:
+
+			self.k_selection = self.get_k_selection(self.population)
+			self.k_elimination = self.get_k_elimination(self.population)
 			print("BEFORE LSO Init meanObjective:",meanObjective,", bestObjective:",bestObjective,"diff:",meanObjective-bestObjective,
 				"k_selection:",self.k_selection,"k_elimination:",self.k_elimination ,
 				"mean_mutation:",self.meanMutation,"mean_crossover:",self.meanCrossover)
@@ -610,9 +649,10 @@ class r0883878:
 		lastMeans = self.addNewMean(lastMeans,meanObjective)
 		#TODO put the stop criteria back: and self.stoppingCriteria(lastMeans,i)
 
-		print(self.str_param())
+		if self.AssesQuality:
+			print(self.str_param() and self.stoppingCriteria(lastMeans,i))
 
-		while( i<self.iterations ):
+		while( i<self.iterations and self.stoppingCriteria(lastMeans,i)):
 
 			if self.timeSteps:
 				selectStart = time.time()
@@ -625,13 +665,16 @@ class r0883878:
 			#crossover + mutation
 			offsprings = np.ndarray(self.populationsize, dtype=Individual)
 			nbr_offspring = 0
+
+			for ind in self.population:
+				self.mutation(ind,self.numberOfSwitches)
+
 			sharedCosts=None
 			if self.selectionDiversity:
 				subPopulation_sharedCost = np.random.choice(self.population, round(self.population.size * self.percentageCostSharing))
 				sharedCosts = self.sharedCostPopulation(self.population,subPopulation_sharedCost)
 
-			for ind in self.population:
-				self.mutation(ind,self.numberOfSwitches)
+			
 
 
 			for j in range(self.populationsize//2):
@@ -660,7 +703,7 @@ class r0883878:
 				NbRandoms = round(self.population.size * self.percentHardMutation)
 				for ind in self.getRandomSubset(newPopulation, NbRandoms):
 					self.mutation_scramble(ind)
-					self.lsoGeneration_(ind)
+					self.lsoInterchange(ind,"best")
 
 			if self.LsoToWorstOnes : 
 				NbOfWorstOnes = round(self.population.size * self.percentOfPopuLso)
@@ -718,7 +761,7 @@ class r0883878:
 				for ind in subPopu:
 					self.mutation_scramble(ind) 
 					self.mutation_scramble(ind)
-				self.lsoInit_(subPopu)
+					self.lsoGeneration_(ind)
 
 			if self.timeSteps:
 				reDiversityTime = time.time() - reDiversityStart
@@ -769,57 +812,60 @@ class r0883878:
 		writerF.writerow([meanObjective,bestObjective,i,timeLeft])
 		fFinal.close()
 
-		#store last params
-		with open('lastParams.txt', 'w') as fParams:
-			fParams.write(self.str_param())
-			fParams.write("""I: {i} meanObjective:{meanObj} bestObjective:{bestObjective} diff:{diff}
-				diversityIndicator:{diversityIndicator}\n
-				 mean_mutation:{mean_mutation} mean_crossover{mean_crossover}
-				 min_mutation:{minMutation} min_crossover:{minCrossover}\n
-				 select_diversity:{select_diversity} elim_diveristy:{elim_diversity} percentageCostSharing:{percentageCostSharing} k_elimDiversity:{k_elimDiversity}\n
-				 LsoInit:{LsoInit}
-				 LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}
-				 percentOfPopuLso:{percentOfPopuLso}\n 
-				 reDiversificationScheme:{reDiversity}
-				 RandomHardMutationThenLso:{Hardmutation} percentHardMutation = {percentHardMutation}
-				""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
-				, diversityIndicator=diversityIndicator,
-				mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,minMutation=self.min_mutation, minCrossover=self.min_crossover,
-				select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,percentageCostSharing = self.percentageCostSharing,k_elimDiversity=self.k_elimDiversity,
-				LsoInit=self.LsoInit,
-				LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
-				percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification,
-				Hardmutation=self.RandomHardMutationThenLso, percentHardMutation=self.percentHardMutation))
-			
-			fParams.write("\nTIME: selectTime:      {meanselect}=>{pSelect}\n".format(meanselect=selectTotal / i, pSelect=selectTotal / itertotal * 100))
-			fParams.write("TIME: LsoTime:         {meanLso}=>{pLso}\n".format(meanLso=LsoTotal / i, pLso=LsoTotal / itertotal * 100))
-			fParams.write("TIME: elimTime:        {meanElim}=>{pElim}\n".format(meanElim=elimTotal / i, pElim=elimTotal / itertotal * 100))
-			fParams.write("TIME: AssesQualityTime:{meaAsses}=>{pAsses}\n".format(meaAsses=AssesQualityTotal / i, pAsses=AssesQualityTotal / itertotal * 100))
-			fParams.write("TIME: ReDiversityTime:{meanReDIversity}=>{pReDIversity}\n".format(meanReDIversity=reDiversityTotal / i, pReDIversity=reDiversityTotal / itertotal * 100))
-			fParams.write("TIME: ReportTime:      {meanReport}=>{pReport}\n".format(meanReport=reportTotal / i, pReport=reportTotal / itertotal * 100))
-			fParams.write("TIME: Total iterTime:  {meanIter}=>{pIter}\n".format(meanIter=itertotal / i, pIter=100))
-			fParams.write("TOTAL TIME:"+ str(time.time() - initStart))
+		if self.AssesQuality:
+			#store last params
+			with open('lastParams.txt', 'w') as fParams:
+				fParams.write(self.str_param())
+				fParams.write("""I: {i} meanObjective:{meanObj} bestObjective:{bestObjective} diff:{diff}
+					diversityIndicator:{diversityIndicator}\n
+					mean_mutation:{mean_mutation} mean_crossover{mean_crossover}
+					min_mutation:{minMutation} min_crossover:{minCrossover}\n
+					select_diversity:{select_diversity} elim_diveristy:{elim_diversity} percentageCostSharing:{percentageCostSharing} k_elimDiversity:{k_elimDiversity}\n
+					LsoInit:{LsoInit}
+					LsoToParents:{LsoToParents} LsoToWorstOnes:{LsoToWorstOnes} LsoToRandomSubset:{LsoToRandomSubset}
+					percentOfPopuLso:{percentOfPopuLso}\n 
+					reDiversificationScheme:{reDiversity}
+					RandomHardMutationThenLso:{Hardmutation} percentHardMutation = {percentHardMutation}
+					""".format(i=i, meanObj=meanObjective, bestObjective=bestObjective, diff=meanObjective-bestObjective
+					, diversityIndicator=diversityIndicator,
+					mean_mutation= self.meanMutation,mean_crossover = self.meanCrossover,minMutation=self.min_mutation, minCrossover=self.min_crossover,
+					select_diversity = self.selectionDiversity, elim_diversity= self.eliminationDiversity,percentageCostSharing = self.percentageCostSharing,k_elimDiversity=self.k_elimDiversity,
+					LsoInit=self.LsoInit,
+					LsoToParents = self.LsoToParents, LsoToWorstOnes=self.LsoToWorstOnes, LsoToRandomSubset=self.LsoToRandomSubset,
+					percentOfPopuLso=self.percentOfPopuLso, reDiversity= self.reDiversitification,
+					Hardmutation=self.RandomHardMutationThenLso, percentHardMutation=self.percentHardMutation))
+				
+				fParams.write("\nTIME: initTime:      {initTime}=>{pInit}\n".format(initTime=initTime , pInit=initTime / itertotal * 100))
+				fParams.write("TIME: selectTime:      {meanselect}=>{pSelect}\n".format(meanselect=selectTotal / i, pSelect=selectTotal / itertotal * 100))
+				fParams.write("TIME: LsoTime:         {meanLso}=>{pLso}\n".format(meanLso=LsoTotal / i, pLso=LsoTotal / itertotal * 100))
+				fParams.write("TIME: elimTime:        {meanElim}=>{pElim}\n".format(meanElim=elimTotal / i, pElim=elimTotal / itertotal * 100))
+				fParams.write("TIME: AssesQualityTime:{meaAsses}=>{pAsses}\n".format(meaAsses=AssesQualityTotal / i, pAsses=AssesQualityTotal / itertotal * 100))
+				fParams.write("TIME: ReDiversityTime:{meanReDIversity}=>{pReDIversity}\n".format(meanReDIversity=reDiversityTotal / i, pReDIversity=reDiversityTotal / itertotal * 100))
+				fParams.write("TIME: ReportTime:      {meanReport}=>{pReport}\n".format(meanReport=reportTotal / i, pReport=reportTotal / itertotal * 100))
+				fParams.write("TIME: Total iterTime:  {meanIter}=>{pIter}\n".format(meanIter=itertotal / i, pIter=100))
+				fParams.write("TOTAL TIME:"+ str(time.time() - initStart))
 				
 
-		print(self.str_param())
+			print(self.str_param())
 
 		print("meanObjective:",meanObjective,", bestObjective:",bestObjective,"diff:",meanObjective-bestObjective)
 		#print(bestSolution)
 		print("I:", i,"timeleft:",timeLeft)
-		print("best Solution:", bestSolution)
+		#print("best Solution:", bestSolution)
 
-		print("tour29: simple greedy heuristic : 30350")
-		print("tour100: simple greedy heuristic 272865")
-		print("tour250: simple greedy heuristic 49889")
-		print("tour750: simple greedy heuristic 119156")
-		"""
-		tour29: simple greedy heuristic 30350
-		tour100: simple greedy heuristic 272865
-		tour250: simple greedy heuristic 49889
-		tour500: simple greedy heuristic 122355
-		tour750: simple greedy heuristic 119156
-		tour1000: simple greedy heuristic 226541
-		"""
+		if self.AssesQuality:
+			print("tour29: simple greedy heuristic : 30350")
+			print("tour100: simple greedy heuristic 272865")
+			print("tour250: simple greedy heuristic 49889")
+			print("tour750: simple greedy heuristic 119156")
+			"""
+			tour29: simple greedy heuristic 30350
+			tour100: simple greedy heuristic 272865
+			tour250: simple greedy heuristic 49889
+			tour500: simple greedy heuristic 122355
+			tour750: simple greedy heuristic 119156
+			tour1000: simple greedy heuristic 226541
+			"""
 
 		if self.timeSteps:
 				selectTotal += selectTime 
@@ -868,52 +914,62 @@ class r0883878:
 	"""LSO"""
 	def lsoInit_(self,population):
 		for i in range(population.size):
-			population[i] = self.lsoInsert(population[i],"best")
+			population[i] = self.lsoSwap(population[i],"best")
+			population[i] = self.lsoSwap(population[i],"best")
 	def lsoGeneration_(self, individual : Individual):
 		self.lsoSwap(individual,"first")
 
 
+
 #-----------------OPTIONS--------------------------------------
-	printEveryIter = True
-	AssesQuality = True
-	timeSteps = True
+	printEveryIter = False
+	AssesQuality = False
+	timeSteps = False
 	minSecLeft = 30
 
 	"""Mutation Selection"""
-	min_k_value = 3
-	max_k_value = 15
-	min_crossover = 0.8
-	min_mutation = 0.1
-	RandomHardMutationThenLso = False
-	percentHardMutation = 0.1
+	percentageOfSwitches = 0.1 #how many of the cities will be swapped
+	min_k_value = 8 #min for k
+	max_k_value = 15 #max for k
+	min_crossover = 0.8 #min for crossover probability
+	min_mutation = 0.1 #max for crossover probability
+	RandomHardMutationThenLso = False #option talked about in
+	percentHardMutation = 0.01
 	"""Local Search Operator"""
-	LsoInit = True
-	LsoToParents = False
+	LsoInit = False #Apply a LSO with selector best solution and the sawp neighbour function
+	LsoToParents = False #apply Lso generation to all prarents
 	LsoToWorstOnes = True #for worst ones:  lso (take first better)
 	LsoToRandomSubset = True  #for random subset:  lso (take first better)
-	percentOfPopuLso = 0.1 # Probability of the population
+	percentOfPopuLso = 0.1 # For random and worst what percentage of the population will be sampled
 	"""Diversity"""
-	percentageCostSharing = 0.7 #percentage of population taken into account when calculating the shared cost
+	percentageCostSharing = 1 #percentage of population taken into account when calculating the shared cost
 	selectionDiversity = False
 	eliminationDiversity = True
 	k_elimDiversity = None #done in the main
 
-	reDiversitification = False
+	sharedCost_alpha = 1 #alpha in the shared cost calculation
+	sharedCost_percentageOfSearchSpace = 0.05  #Tpercentage of the searchSpace for sigma
 
-	"""
-	BAD: Mutation min 0.05 or lower
-	bad But need to tune: Search space space 0.01
-	TOTEST: Elim keep the fvals and only change the ones that are in dic[newsurvivor]
-	"""
+	reDiversitification = False #reDiversification scheme
+
+	"""Initialisation"""
+	populationsize = 200 #population size at each iteration
+	init_k_selection = 5 #initial value of k_selection
+	init_k_elimination = 5 #initial value of k_elimination
+	init_mutation_proba = 0.1 #initial value of mutation_proba
+	init_crossover_proba = 1 #initial value of crossover_proba
+	perturbation_prob = 0.2 #
+	"""Stopping Criteria"""
+	iterations = 2 #max iterations
+	genForConvergence = 5 #number or generation taken into account for conevrgence
+	stoppingConvergenceSlope = 0.000001 #mùin slope before stopping the loop
+
+
+
+
 	
 	
 if __name__== "__main__":
 
-	r = r0883878(
-		populationsize = 200, init_k_selection = 5, percentageOfSwitches = 0.1, init_k_elimination = 5,
-	 	init_mutation_proba = 0.9, init_crossover_proba = 1, perturbation_prob = 0.2,
-	 	iterations = 500, genForConvergence = 5, stoppingConvergenceSlope = 0.0001,
-		sharedCost_alpha = 1, sharedCost_percentageOfSearchSpace = 0.1) #TODO change sharedCost_percentageOfSearchSpace back to 0.1-0.2
-	
-	r.k_elimDiversity = round(0.25 * r.populationsize)
-	r.optimize("tourData/tour250.csv")
+	r = r0883878()
+	r.optimize("tourData/tour500.csv")
