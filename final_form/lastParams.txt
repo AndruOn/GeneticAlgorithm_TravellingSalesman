@@ -1,0 +1,47 @@
+
+		populationsize = 200
+		#selection & elimination
+		init_k_selection = 5
+		k_selection = 8
+		init_k_elimination = 5
+		k_selection = 8
+		#mutation
+		init_mutation_proba = 0.1
+		percentageOfSwitches = 0.1
+		numberOfSwitchies = 10
+		#crossover
+		init_crossover_proba = 1
+
+		iterations = 75
+		genForConvergence = 5
+		stoppingConvergenceSlope = 1e-06
+		numberOfCities = 100
+
+		#diversity
+		sigma = 5
+		alpha = 1
+		sharedCost_percentageOfSearchSpace = 0.05
+		I: 26 meanObjective:337776.1094425732 bestObjective:328716.7769444415 diff:9059.332498131727
+					diversityIndicator:0.10492749999999974
+
+					mean_mutation:0.11420414541103323 mean_crossover0.9842124287125216
+					min_mutation:0.1 min_crossover:0.8
+
+					select_diversity:True elim_diveristy:False percentageCostSharing:0.75 k_elimDiversity:20
+
+					LsoInit:False
+					LsoToParents:False LsoToWorstOnes:True LsoToRandomSubset:True
+					percentOfPopuLso:0.1
+ 
+					reDiversificationScheme:False
+					RandomHardMutationThenLso:True percentHardMutation = 0.1
+					
+TIME: initTime:      0.041759490966796875=>0.02874996459847096
+TIME: selectTime:      0.19362036081460807=>3.4658238915823523
+TIME: LsoTime:         5.058172904528105=>90.54180266224029
+TIME: elimTime:        0.07892200580010048=>1.4127118249484856
+TIME: AssesQualityTime:0.25503408908843994=>4.5651357915658295
+TIME: ReDiversityTime:9.078245896559495e-07=>1.6250151270031886e-05
+TIME: ReportTime:      0.0008022510088407076=>0.014360373577386662
+TIME: Total iterTime:  5.586560854545007=>100
+TOTAL TIME:145.30397057533264

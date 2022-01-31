@@ -35,7 +35,7 @@ class r0883878:
 			for i in range(len(self.path)-1):
 				cost = distanceMatrix[self.path[i]][self.path[i+1]]
 				if cost == np.inf:
-					totalCost += 10^20
+					totalCost += 10**20
 				else:
 					totalCost += cost
 			totalCost+= distanceMatrix[self.path[len(self.path)-1]][0]
@@ -70,7 +70,9 @@ class r0883878:
 			self.population[i] =  r0883878.Individual(self.numberOfCities, perturbation_prob, self.init_mutation_proba, self.init_crossover_proba,
 									self.init_k_selection, self.init_k_elimination)
 	def initialisation(self, perturbation_prob : float):
-		return self.nearest_neighbour_heuristic_init(perturbation_prob)
+		if self.heuristicInit:
+			return self.nearest_neighbour_heuristic_init(perturbation_prob)
+		return self.initialisation_random(perturbation_prob)
 
 
 
@@ -409,14 +411,18 @@ class r0883878:
 	#TODO
 	def nearest_neighbour_heuristic_init(self, perturbation_prob : float):
 		heuristicPopulation = np.ndarray(self.populationsize, dtype = r0883878.Individual)
-		for i in range(self.populationsize):
+		nbHeuristic = int(self.heuristicInitPercent * self.populationsize)
+		for i in range(nbHeuristic):
 			heuristicPopulation[i] = r0883878.Individual(self.numberOfCities, perturbation_prob, self.init_mutation_proba, self.init_crossover_proba,
 									self.init_k_selection, self.init_k_elimination)
 			completePath = self.nearest_neighbour_heuristic(self.numberOfCities, randint(0, self.numberOfCities),self.distanceMatrix)
 			#print("completepath:",completePath)
 			heuristicPopulation[i].path = self.reducePath(completePath)
 			#print("reducePath:",heuristicPopulation[i].path )
-			
+		for i in range(nbHeuristic,self.populationsize):
+			heuristicPopulation[i] = r0883878.Individual(self.numberOfCities, perturbation_prob, self.init_mutation_proba, self.init_crossover_proba,
+									self.init_k_selection, self.init_k_elimination)
+
 		self.population =  heuristicPopulation
 
 	def nearest_neighbour_heuristicOld(self, NbCities : int, start :int, distMatrix):
@@ -497,7 +503,8 @@ class r0883878:
 
 		fval = individual.cost(self.distanceMatrix)
 		#print("fval:",fval,"onePlusBeta:",onePlusBeta)
-		return fval * onePlusBeta**np.sign(fval)
+		returnVal = fval * onePlusBeta**np.sign(fval)
+		return returnVal
 
 	def getHammingMatrix(self, pop : np.array(Individual)):
 		m = np.ndarray((pop.size,pop.size), dtype = int)
@@ -921,9 +928,9 @@ class r0883878:
 
 
 #-----------------OPTIONS--------------------------------------
-	printEveryIter = False
-	AssesQuality = False
-	timeSteps = False
+	printEveryIter = True
+	AssesQuality = True
+	timeSteps = True
 	minSecLeft = 30
 
 	"""Mutation Selection"""
@@ -932,8 +939,8 @@ class r0883878:
 	max_k_value = 15 #max for k
 	min_crossover = 0.8 #min for crossover probability
 	min_mutation = 0.1 #max for crossover probability
-	RandomHardMutationThenLso = False #option talked about in
-	percentHardMutation = 0.01
+	RandomHardMutationThenLso = True #option talked about in
+	percentHardMutation = 0.1
 	"""Local Search Operator"""
 	LsoInit = False #Apply a LSO with selector best solution and the sawp neighbour function
 	LsoToParents = False #apply Lso generation to all prarents
@@ -941,9 +948,9 @@ class r0883878:
 	LsoToRandomSubset = True  #for random subset:  lso (take first better)
 	percentOfPopuLso = 0.1 # For random and worst what percentage of the population will be sampled
 	"""Diversity"""
-	percentageCostSharing = 1 #percentage of population taken into account when calculating the shared cost
-	selectionDiversity = False
-	eliminationDiversity = True
+	percentageCostSharing = 0.75 #percentage of population taken into account when calculating the shared cost
+	selectionDiversity = True
+	eliminationDiversity = False
 	k_elimDiversity = None #done in the main
 
 	sharedCost_alpha = 1 #alpha in the shared cost calculation
@@ -958,8 +965,12 @@ class r0883878:
 	init_mutation_proba = 0.1 #initial value of mutation_proba
 	init_crossover_proba = 1 #initial value of crossover_proba
 	perturbation_prob = 0.2 #
+
+	heuristicInit = True  #ADDED
+	heuristicInitPercent = 0.2   #ADDED
+
 	"""Stopping Criteria"""
-	iterations = 500 #max iterations
+	iterations = 75 #max iterations
 	genForConvergence = 5 #number or generation taken into account for conevrgence
 	stoppingConvergenceSlope = 0.000001 #mùin slope before stopping the loop
 
@@ -971,4 +982,4 @@ class r0883878:
 if __name__== "__main__":
 
 	r = r0883878()
-	r.optimize("tourData/tour500.csv")
+	r.optimize("tour100.csv")

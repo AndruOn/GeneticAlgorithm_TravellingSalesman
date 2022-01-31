@@ -1,5 +1,5 @@
 from os import path
-from r0883878 import r0883878
+from Project.r0883878 import r0883878
 from individual import Individual
 import numpy as np
 
